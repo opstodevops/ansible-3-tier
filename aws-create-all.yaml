@@ -1,0 +1,350 @@
+--- # Create VPC, ALB, Subnets, Security Groups, IGW and IGW route
+- hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    - vpc_region: us-east-1
+
+  tasks:
+    - name: create vpc
+      ec2_vpc_net:
+        name: ansible
+        cidr_block: 10.0.0.0/16
+        region: "{{ vpc_region }}"
+        tags:
+          Name: ansible-vpc
+          app: ansible
+          env: dev
+        state: present
+      register: ansible_vpc
+    
+    - name: display ansible_vpc results
+      debug: var=ansible_vpc
+
+    # - name: create first subnet
+    #   ec2_vpc_subnet:
+    #     region: us-east-1
+    #     az: us-east-1a
+    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
+    #     cidr: 10.0.1.0/24
+    #     map_public: yes
+    #     tags:
+    #       Name: ansible-subnet
+    #       app: ansible
+    #       env: dev
+    #     state: present
+    #   register: ansible_subnet_1
+      
+    # - name: create second subnet
+    #   ec2_vpc_subnet:
+    #     region: us-east-1
+    #     az: us-east-1b
+    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
+    #     cidr: 10.0.2.0/24
+    #     map_public: yes
+    #     tags:
+    #       Name: ansible-subnet
+    #       app: ansible
+    #       env: dev
+    #     state: present
+    #   register: ansible_subnet_2
+      
+    # - name: create third subnet
+    #   ec2_vpc_subnet:
+    #     region: us-east-1
+    #     az: us-east-1c
+    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
+    #     cidr: 10.0.3.0/24
+    #     map_public: yes
+    #     tags:
+    #       Name: ansible-subnet
+    #       app: ansible
+    #       env: dev
+    #     state: present
+    #   register: ansible_subnet_3
+    
+    - name: obtain all AZ present in region {{ vpc_region }}
+      aws_az_facts:
+        region: "{{ vpc_region }}"
+      register: az_in_region
+  
+    - name: display all AZ present in region {{ vpc_region }}
+      debug: var=az_in_region
+    
+    #create public subnets 2 AZs
+    - name: display AZ that will be used for public and private Subnets
+      debug:
+        msg:
+          - "public subnet in AZ: {{ az_in_region.availability_zones[0].zone_name }}"
+          - "public subnet in AZ: {{ az_in_region.availability_zones[1].zone_name }}"
+    
+    - name: create public subnet in AZ {{ az_in_region.availability_zones[0].zone_name }}
+      ec2_vpc_subnet:
+        state: present
+        cidr: 10.0.1.0/24
+        az: "{{ az_in_region.availability_zones[0].zone_name }}"
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: "{{ vpc_region }}"
+        map_public: no
+        tags:
+          Name: "private subnet 1"
+      register: private_subnet_1
+    
+    - name: create public subnet in AZ {{ az_in_region.availability_zones[1].zone_name }}
+      ec2_vpc_subnet:
+        state: present
+        cidr: 10.0.2.0/24
+        az: "{{ az_in_region.availability_zones[0].zone_name }}"
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: "{{ vpc_region }}"
+        map_public: no
+        tags:
+          Name: "private subnet 2"
+      register: private_subnet_2
+
+    - name: show private subnet one details
+      debug: var=private_subnet_1
+        
+    
+    - name: show private subnet two details
+      debug: var=private_subnet_2
+    
+    - name: elb security group
+      ec2_group:
+        name: elb
+        description: elb sg
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: "{{ vpc_region }}"
+        tags:
+          Name: elb
+          app: ansible
+          env: dev
+        rules:
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 80 # http
+      register: ansible_elb_sg
+    
+    - name: create a security group for web hosts
+      ec2_group:
+        state: present
+        name: sg_ansible_vpc_publicsubnet_webhost
+        description: security group for webhosts within the private subnet of ansible VPC
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: "{{ vpc_region }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 22
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 80
+      register: sg_ansible_vpc_publicsubnet_webhost
+  
+    - name: display details for webhost security group
+      debug: var=sg_ansible_vpc_privatesubnet_webhost 
+    
+    - name: create internet gateway
+      ec2_vpc_igw:
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: us-east-1
+        state: present
+        tags:
+          Name: "ansible-igw"
+          app: ansible
+          env: dev
+      register: igw
+      
+    - name: Route IGW
+      ec2_vpc_route_table:
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: us-east-1
+        subnets:
+          - "{{ private_subnet_1.subnet.id }}"
+          - "{{ private_subnet_2.subnet.id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ igw.gateway_id  }}"
+        tags:
+          Name: ansible-public
+          
+    
+      
+    - pause:
+        prompt: "Enter password"
+        echo: no
+      when: password is undefined
+      register: password_input
+
+    - set_fact:
+        password: "{{ password_input.user_input }}"
+      when: password is undefined
+
+    - ec2_vpc_net_info:
+        region: us-east-1
+        filters:
+          "tag:Name": ansible
+      register: ansible_vpc
+
+    # - ec2_vpc_subnet_info:
+    #     region: us-east-1
+    #     filters:
+    #       vpc-id: "{{ ansible_vpc.vpc.id }}"
+    #   loop:
+    #     - "{{ ansible_subnet_1.subnet.id }}"
+    #     - "{{ ansible_subnet_2.subnet.id }}"
+    #     - "{{ ansible_subnet_3.subnet.id }}" 
+    #   register: ansible_subnet
+
+    # - name: web security group
+    #   ec2_group:
+    #     name: web
+    #     description: web sg
+    #     vpc_id: "{{ ansible_vpc.vpcs[0].id }}"
+    #     region: us-east-1
+    #     tags:
+    #       Name: web
+    #       app: ansible
+    #       env: dev
+    #     rules:
+    #       - proto: tcp
+    #         from_port: 22
+    #         to_port: 22
+    #         cidr_ip: 0.0.0.0/0
+    #         rule_desc: allow all on port 22
+    #       - proto: tcp
+    #         from_port: 80
+    #         to_port: 80
+    #         cidr_ip: 0.0.0.0/0
+    #         rule_desc: allow all on port 80
+
+    - name: create a new ec2 key
+      ec2_key:
+        name: aws-ansible-key
+        region: us-east-1
+        state: present
+      register: ec2_key
+
+    - name: Save private key to disk
+      copy: content="{{ ec2_key.key.private_key }}" dest="./aws-ansible-key.pem" mode=0600
+      when: ec2_key.changed
+
+    - name: linux - create ec2 instance
+      ec2:
+        key_name: aws-ansible-key
+        instance_type: t2.micro
+        image: ami-0c322300a1dd5dc79
+        region: "{{ vpc_region }}"
+        group: web
+        # count: 1
+        exact_count: 1
+        count_tag:
+          Name: web
+        vpc_subnet_id: "{{ private_subnet_1.subnet.id }}"
+        user_data: |
+          #!/bin/bash
+          sudo adduser ansible
+          sudo echo "{{ password }}" | passwd --stdin ansible
+          echo 'ansible        ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers
+          sudo sed -n 'H;${x;s/\PasswordAuthentication no/PasswordAuthentication yes/;p;}' /etc/ssh/sshd_config > tmp_sshd_config
+          sudo cat tmp_sshd_config > /etc/ssh/sshd_config
+          rm -f tmp_sshd_config
+          sudo service sshd restart
+        wait: yes
+        assign_public_ip: no
+        instance_tags:
+          Name: web
+          app: ansible
+          env: dev
+      register: ansible_ec2_1
+      
+    - name: linux - create ec2 instance
+      ec2:
+        key_name: aws-ansible-key
+        instance_type: t2.micro
+        image: ami-0c322300a1dd5dc79
+        region: "{{ vpc_region }}"
+        group: web
+        exact_count: 1
+        count_tag:
+          Name: web
+        vpc_subnet_id: "{{ private_subnet_2.subnet.id }}"
+        user_data: |
+          #!/bin/bash
+          sudo adduser ansible
+          sudo echo "{{ password }}" | passwd --stdin ansible
+          echo 'ansible        ALL=(ALL)       NOPASSWD: ALL' >> /etc/sudoers
+          sudo sed -n 'H;${x;s/\PasswordAuthentication no/PasswordAuthentication yes/;p;}' /etc/ssh/sshd_config > tmp_sshd_config
+          sudo cat tmp_sshd_config > /etc/ssh/sshd_config
+          rm -f tmp_sshd_config
+          sudo service sshd restart
+        wait: yes
+        assign_public_ip: no
+        instance_tags:
+          Name: web
+          app: ansible
+          env: dev
+      register: ansible_ec2_2
+    - debug:
+        var: ansible_ec2_2
+
+    # - name: associate new elastic IPs with each of the instances
+    #   ec2_eip:
+    #     device_id: "{{ item }}"
+    #     region: us-east-1
+    #     release_on_disassociation: yes
+    #   loop: "{{ ec2.instance_ids }}"
+    
+    - name: create web target group
+      elb_target_group:
+        name: webtargetgroup
+        protocol: http
+        port: 80
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        health_check_path: /
+        successful_response_codes: "200,250-260"
+        targets:
+          - Id: "{{ ansible_ec2_1.id }}"
+            Port: 80
+          - Id: "{{ ansible_ec2_2.id }}"
+            Port: 80
+        state: present
+        tags:
+          Name: "ansible-tg"
+          app: ansible
+          env: dev
+      register: ansible_web_target_group
+    - debug:
+        var: ansible_web_target_group
+    
+    - name: Create load balancer
+      elb_application_lb:
+        name: "ansible-elb"
+        security_groups:
+          - "{{ ansible_elb_sg.group_id }}"
+          # - us-east-1b
+        subnets:
+          - "{{ private_subnet_1.subnet.id }}"
+          - "{{ private_subnet_2.subnet.id }}" 
+        listeners:
+          - Protocol: HTTP
+            Port: 80
+            # SslPolicy: ELBSecurityPolicy-2015-05
+            # Certificates: # The ARN of the certificate (only one certficate ARN should be provided)
+            #   - CertificateArn: arn:aws:iam::12345678987:server-certificate/test.domain.com
+            DefaultActions:
+              - Type: forward # Required.
+                TargetGroupName: webtargetgroup # Required. The name of the target group
+        tags:
+          Name: "ansible-public-elb"
+          app: ansible
+          env: dev
+          Stack: "dev"
+        state: present
+      register: ansible_elb
