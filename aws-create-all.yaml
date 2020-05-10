@@ -1,4 +1,4 @@
---- # Create VPC, ALB, Subnets, Security Groups, IGW and IGW route
+--- # Create VPC, ALB, EC2, Subnets, Security Groups, IGW and IGW route
 - hosts: localhost
   gather_facts: false
   connection: local
@@ -21,48 +21,6 @@
     - name: display ansible_vpc results
       debug: var=ansible_vpc
 
-    # - name: create first subnet
-    #   ec2_vpc_subnet:
-    #     region: us-east-1
-    #     az: us-east-1a
-    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
-    #     cidr: 10.0.1.0/24
-    #     map_public: yes
-    #     tags:
-    #       Name: ansible-subnet
-    #       app: ansible
-    #       env: dev
-    #     state: present
-    #   register: ansible_subnet_1
-      
-    # - name: create second subnet
-    #   ec2_vpc_subnet:
-    #     region: us-east-1
-    #     az: us-east-1b
-    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
-    #     cidr: 10.0.2.0/24
-    #     map_public: yes
-    #     tags:
-    #       Name: ansible-subnet
-    #       app: ansible
-    #       env: dev
-    #     state: present
-    #   register: ansible_subnet_2
-      
-    # - name: create third subnet
-    #   ec2_vpc_subnet:
-    #     region: us-east-1
-    #     az: us-east-1c
-    #     vpc_id: "{{ ansible_vpc.vpc.id }}"
-    #     cidr: 10.0.3.0/24
-    #     map_public: yes
-    #     tags:
-    #       Name: ansible-subnet
-    #       app: ansible
-    #       env: dev
-    #     state: present
-    #   register: ansible_subnet_3
-    
     - name: obtain all AZ present in region {{ vpc_region }}
       aws_az_facts:
         region: "{{ vpc_region }}"
@@ -71,7 +29,7 @@
     - name: display all AZ present in region {{ vpc_region }}
       debug: var=az_in_region
     
-    #create public subnets 2 AZs
+    # Create public subnets 2 AZs
     - name: display AZ that will be used for public and private Subnets
       debug:
         msg:
@@ -105,7 +63,6 @@
     - name: show private subnet one details
       debug: var=private_subnet_1
         
-    
     - name: show private subnet two details
       debug: var=private_subnet_2
     
@@ -174,8 +131,6 @@
         tags:
           Name: ansible-public
           
-    
-      
     - pause:
         prompt: "Enter password"
         echo: no
@@ -191,38 +146,6 @@
         filters:
           "tag:Name": ansible
       register: ansible_vpc
-
-    # - ec2_vpc_subnet_info:
-    #     region: us-east-1
-    #     filters:
-    #       vpc-id: "{{ ansible_vpc.vpc.id }}"
-    #   loop:
-    #     - "{{ ansible_subnet_1.subnet.id }}"
-    #     - "{{ ansible_subnet_2.subnet.id }}"
-    #     - "{{ ansible_subnet_3.subnet.id }}" 
-    #   register: ansible_subnet
-
-    # - name: web security group
-    #   ec2_group:
-    #     name: web
-    #     description: web sg
-    #     vpc_id: "{{ ansible_vpc.vpcs[0].id }}"
-    #     region: us-east-1
-    #     tags:
-    #       Name: web
-    #       app: ansible
-    #       env: dev
-    #     rules:
-    #       - proto: tcp
-    #         from_port: 22
-    #         to_port: 22
-    #         cidr_ip: 0.0.0.0/0
-    #         rule_desc: allow all on port 22
-    #       - proto: tcp
-    #         from_port: 80
-    #         to_port: 80
-    #         cidr_ip: 0.0.0.0/0
-    #         rule_desc: allow all on port 80
 
     - name: create a new ec2 key
       ec2_key:
@@ -262,7 +185,9 @@
           Name: web
           app: ansible
           env: dev
-      register: ansible_ec2_1
+      register: ansible_ec2_web1
+    - debug:
+        var: ansible_ec2_web1
       
     - name: linux - create ec2 instance
       ec2:
@@ -290,29 +215,22 @@
           Name: web
           app: ansible
           env: dev
-      register: ansible_ec2_2
+      register: ansible_ec2_web2
     - debug:
-        var: ansible_ec2_2
+        var: ansible_ec2_web2
 
-    # - name: associate new elastic IPs with each of the instances
-    #   ec2_eip:
-    #     device_id: "{{ item }}"
-    #     region: us-east-1
-    #     release_on_disassociation: yes
-    #   loop: "{{ ec2.instance_ids }}"
-    
     - name: create web target group
       elb_target_group:
         name: webtargetgroup
         protocol: http
         port: 80
-        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        vpc_id: "{{ ansible_vpc.vpcs[0].id }}"
         health_check_path: /
         successful_response_codes: "200,250-260"
         targets:
-          - Id: "{{ ansible_ec2_1.id }}"
+          - Id: 
             Port: 80
-          - Id: "{{ ansible_ec2_2.id }}"
+          - Id: 
             Port: 80
         state: present
         tags:
