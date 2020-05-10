@@ -6,7 +6,11 @@ RUN  yum check-update; \
    yum install -y openssh-clients; \
    yum install -y sshpass; \
    yum install -y ansible; \
-   yum install -y python-boto python-boto3; \
    yum install -y awscli
 
+RUN pip install --upgrade pip
 
+RUN pip install boto; \
+   pip install boto3; \
+   pip install botocore
+#   pip install "pywinrm>=0.3.0"
