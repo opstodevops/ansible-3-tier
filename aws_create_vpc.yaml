@@ -75,8 +75,8 @@
             cidr_ip: 0.0.0.0/0
             rule_desc: allow all on port 80 # http
       register: ansible_elb_sg
-    - debug:
-        var: ansible_elb_sg
+    # - debug:
+    #     var: ansible_elb_sg
       
     - name: create internet gateway
       ec2_vpc_igw:
@@ -103,26 +103,45 @@
         tags:
           Name: ansible-public
           
-    - name: Create load balancer
-      elb_application_lb:
-        name: "ansible-elb"
-        security_groups:
-          - "{{ ansible_elb_sg.group_id }}"
-          # - us-east-1b
-        subnets:
-          - "{{ ansible_subnet_1.subnet.id }}"
-          - "{{ ansible_subnet_2.subnet.id }}" 
-        listeners:
-          - Protocol: HTTP
-            Port: 80
-            SslPolicy: ELBSecurityPolicy-2015-05
-            # Certificates: # The ARN of the certificate (only one certficate ARN should be provided)
-            #   - CertificateArn: arn:aws:iam::12345678987:server-certificate/test.domain.com
-            DefaultActions:
-              - Type: forward # Required.
-                # TargetGroupName: # Required. The name of the target group
-        tags:
-          Name: "ansible-public-elb"
-          Stack: "dev"
+    - name: create web target group
+      elb_target_group:
+        name: webtargetgroup
+        protocol: http
+        port: 80
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        health_check_path: /
+        successful_response_codes: "200,250-260"
         state: present
-      register: ansible_elb
+        tags:
+          Name: "ansible-tg"
+          app: ansible
+          env: dev
+      register: ansible_web_target_group
+    - debug:
+        var: ansible_web_target_group
+    
+    # - name: Create load balancer
+    #   elb_application_lb:
+    #     name: "ansible-elb"
+    #     security_groups:
+    #       - "{{ ansible_elb_sg.group_id }}"
+    #       # - us-east-1b
+    #     subnets:
+    #       - "{{ ansible_subnet_1.subnet.id }}"
+    #       - "{{ ansible_subnet_2.subnet.id }}" 
+    #     listeners:
+    #       - Protocol: HTTP
+    #         Port: 80
+    #         SslPolicy: ELBSecurityPolicy-2015-05
+    #         # Certificates: # The ARN of the certificate (only one certficate ARN should be provided)
+    #         #   - CertificateArn: arn:aws:iam::12345678987:server-certificate/test.domain.com
+    #         DefaultActions:
+    #           - Type: forward # Required.
+    #             # TargetGroupName: # Required. The name of the target group
+    #     tags:
+    #       Name: "ansible-public-elb"
+    #       app: ansible
+    #       env: dev
+    #       Stack: "dev"
+    #     state: present
+    #   register: ansible_elb
