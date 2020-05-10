@@ -1,9 +1,6 @@
 # ansible-3-tier
 Code repository for Ansible 3 tier architecture project
 
-# ansible-docker
-Code repository for Ansible, Docker and AWS project.
-
 ### Create a Docker container from Dockerfile
 ```
 docker build --rm -t centos:ansible .
