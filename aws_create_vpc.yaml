@@ -1,4 +1,4 @@
---- # Create VPC, subnet, IGW and IGW route
+--- # Create VPC, ALB, Subnets, Security Groups, IGW and IGW route
 - hosts: localhost
   gather_facts: false
   connection: local
@@ -58,6 +58,26 @@
         state: present
       register: ansible_subnet_3
 
+    - name: elb security group
+      ec2_group:
+        name: elb
+        description: elb sg
+        vpc_id: "{{ ansible_vpc.vpc.id }}"
+        region: us-east-1
+        tags:
+          Name: elb
+          app: ansible
+          env: dev
+        rules:
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all on port 80 # http
+      register: ansible_elb_sg
+    - debug:
+        var: ansible_elb_sg
+      
     - name: create internet gateway
       ec2_vpc_igw:
         vpc_id: "{{ ansible_vpc.vpc.id }}"
@@ -82,3 +102,27 @@
             gateway_id: "{{ igw.gateway_id  }}"
         tags:
           Name: ansible-public
+          
+    - name: Create load balancer
+      elb_application_lb:
+        name: "ansible-elb"
+        security_groups:
+          - "{{ ansible_elb_sg.group_id }}"
+          # - us-east-1b
+        subnets:
+          - "{{ ansible_subnet_1.subnet.id }}"
+          - "{{ ansible_subnet_2.subnet.id }}" 
+        listeners:
+          - Protocol: HTTP
+            Port: 80
+            SslPolicy: ELBSecurityPolicy-2015-05
+            # Certificates: # The ARN of the certificate (only one certficate ARN should be provided)
+            #   - CertificateArn: arn:aws:iam::12345678987:server-certificate/test.domain.com
+            DefaultActions:
+              - Type: forward # Required.
+                # TargetGroupName: # Required. The name of the target group
+        tags:
+          Name: "ansible-public-elb"
+          Stack: "dev"
+        state: present
+      register: ansible_elb
