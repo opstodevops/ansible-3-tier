@@ -28,7 +28,7 @@ docker container run --rm -it --name ansible01 --volume "$(pwd)"/ansible --workd
 
 ### Deploy the environment
 ```
-ansible-playbook aws_deploy_ansible_env.yaml
+ansible-playbook aws_deploy_ansible_3tier.yml
 ```
 
 

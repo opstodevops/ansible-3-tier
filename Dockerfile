@@ -13,4 +13,4 @@ RUN pip install --upgrade pip
 RUN pip install boto; \
    pip install boto3; \
    pip install botocore
-#   pip install "pywinrm>=0.3.0"
+

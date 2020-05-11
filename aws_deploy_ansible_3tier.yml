@@ -1,4 +1,4 @@
---- # Create VPC, ALB, EC2, Subnets, Security Groups, IGW and IGW route
+--- # Create VPC, ALB, EC2, Subnets, Security Groups, EC2 keypair, IGW and IGW route
 - hosts: localhost
   gather_facts: false
   connection: local
@@ -20,7 +20,7 @@
         tags:
           Name: ansible-vpc
           app: ansible
-          env: dev
+          stack: dev
         state: present
       register: ansible_vpc
     
@@ -35,7 +35,6 @@
     - name: display all AZ present in region {{ vpc_region }}
       debug: var=az_in_region
     
-    # Create public subnets 2 AZs
     - name: display AZ that will be used for public and private Subnets
       debug:
         msg:
@@ -54,6 +53,9 @@
           Name: "private subnet 1"
       register: private_subnet_1
     
+    - name: show private subnet one details
+      debug: var=private_subnet_1  
+    
     - name: create public subnet in AZ {{ az_in_region.availability_zones[1].zone_name }}
       ec2_vpc_subnet:
         state: present
@@ -66,9 +68,6 @@
           Name: "private subnet 2"
       register: private_subnet_2
 
-    - name: show private subnet one details
-      debug: var=private_subnet_1
-        
     - name: show private subnet two details
       debug: var=private_subnet_2
     
@@ -81,7 +80,7 @@
         tags:
           Name: elb
           app: ansible
-          env: dev
+          stack: dev
         rules:
           - proto: tcp
             from_port: 80
@@ -92,10 +91,10 @@
     - debug:
         var: ansible_elb_sg
     
-    - name: create security group for web hosts
+    - name: web hosts security group
       ec2_group:
         state: present
-        name: web # sg_ansible_vpc_publicsubnet_webhost
+        name: web
         description: security group for webhosts within the private subnet of ansible VPC
         vpc_id: "{{ ansible_vpc.vpc.id }}"
         region: "{{ vpc_region }}"
@@ -114,11 +113,11 @@
             from_port: 80
             to_port: 80
             group_name: "{{ ansible_elb_sg.group_id }}"
-            rule_desc: allow all on port 80 from load balancer
+            group_desc: allow from load balancer on port 80
         tags:
           Name: "web_sg"
           app: ansible
-          env: dev
+          stack: dev
       register: ansible_web_sg
   
     - name: display details for webhost security group
@@ -132,7 +131,7 @@
         tags:
           Name: "ansible-igw"
           app: ansible
-          env: dev
+          stack: dev
       register: igw
       
     - name: Route IGW
@@ -201,7 +200,7 @@
         instance_tags:
           Name: web
           app: ansible
-          env: dev
+          stack: dev
       register: ansible_ec2_web1
     - debug:
         var: ansible_ec2_web1
@@ -233,7 +232,7 @@
         instance_tags:
           Name: web
           app: ansible
-          env: dev
+          stack: dev
       register: ansible_ec2_web2
     - debug:
         var: ansible_ec2_web2
@@ -257,7 +256,7 @@
         tags:
           Name: "ansible-tg"
           app: ansible
-          env: dev
+          stack: dev
       register: ansible_web_target_group
     - debug:
         var: ansible_web_target_group
@@ -267,7 +266,6 @@
         name: "ansible-elb"
         security_groups:
           - "{{ ansible_elb_sg.group_id }}"
-          # - us-east-1b
         subnets:
           - "{{ private_subnet_1.subnet.id }}"
           - "{{ private_subnet_2.subnet.id }}" 
@@ -283,7 +281,7 @@
         tags:
           Name: "ansible-public-elb"
           app: ansible
-          env: dev
+          stack: dev
           Stack: "dev"
         state: present
       register: ansible_elb
