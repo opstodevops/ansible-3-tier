@@ -191,7 +191,7 @@
           rm -f tmp_sshd_config
           sudo service sshd restart
         wait: yes
-        assign_public_ip: no
+        assign_public_ip: yes
         instance_tags:
           Name: web
           app: ansible
@@ -221,7 +221,7 @@
           rm -f tmp_sshd_config
           sudo service sshd restart
         wait: yes
-        assign_public_ip: no
+        assign_public_ip: yes
         instance_tags:
           Name: web
           app: ansible
@@ -239,9 +239,9 @@
         health_check_path: /
         successful_response_codes: "200,250-260"
         targets:
-          - Id: i-03eab95cc042df9e3
+          - Id: i-02792d8a1f41b10f4
             Port: 80
-          - Id: i-0747c22bc2ff090aa
+          - Id: i-06b716cd1535e15a0
             Port: 80
         state: present
         tags:
