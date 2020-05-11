@@ -199,6 +199,8 @@
       register: ansible_ec2_web1
     - debug:
         var: ansible_ec2_web1
+    - debug:
+        var: ansible_ec2_web1.tagged_instances[0].id
         
     - name: linux - create ec2 instance
       ec2:
@@ -229,6 +231,8 @@
       register: ansible_ec2_web2
     - debug:
         var: ansible_ec2_web2
+    - debug:
+        var: ansible_ec2_web2.tagged_instances[0].id
 
     - name: create web target group
       elb_target_group:
@@ -239,9 +243,9 @@
         health_check_path: /
         successful_response_codes: "200,250-260"
         targets:
-          - Id: i-02792d8a1f41b10f4
+          - Id: "{{ ansible_ec2_web1.tagged_instances[0].id }}"
             Port: 80
-          - Id: i-06b716cd1535e15a0
+          - Id: "{{ ansible_ec2_web2.tagged_instances[0].id }}"
             Port: 80
         state: present
         tags:
