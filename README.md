@@ -28,13 +28,10 @@ docker container run --rm -it --name ansible01 --volume "$(pwd)"/ansible --workd
 
 ### Deploy the environment
 ```
-ansible-playbook aws_deploy_ansible_env.yaml -e 'password=<Password>'
+ansible-playbook aws_deploy_ansible_env.yaml
 ```
 
-### Delete the ansible environment
-```
-ansible-playbook aws_delete_ansible_env.yaml
-```
+
 
 
 
