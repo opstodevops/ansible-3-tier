@@ -1,0 +1,67 @@
+# Use public Systems Manager Parameter
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-windows-latest/Windows_Server-2019-English-Core-Base-2020.02.12'
+  KeyName:
+    Description: Name of an existing EC2 KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: !Ref LatestAmiId
+    us-east-2:
+      AMI: !Ref LatestAmiId
+Resources:
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - !Ref AWS::Region
+        - AMI
+      InstanceType: t2.micro
+      Tags:
+        - Key: Name
+          Value: !Join
+           - ""
+           - - "EC2 Instance for Dev stack"
+             - !Ref AWS::Region
+        # - Key: NameOfService
+        #   Value: !Ref NameOfService
+      SecurityGroups:
+        - !Ref MySecurityGroup
+      KeyName: !Ref KeyName
+      UserData:
+        'Fn::Base64':
+          !Sub |
+            <powershell>
+            Install-WindowsFeature web-server -IncludeAllSubFeature;
+            Install-WindowsFeature  Web-Mgmt-Tools -IncludeAllSubFeature;
+            Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'));
+            </powershell>
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SimpleWinGroup
+      GroupDescription: Enables WinRM-HTTP traffic via port 5985 and RDP 3389
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5985
+          ToPort: 5985
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/0
+Outputs:
+  ServerDns:
+    Value: !GetAtt
+      - Ec2Instance
+      - PublicDnsName
+      
+# aws ssm get-parameters-by-path --path "/aws/service/ami-windows-latest" --region us-east-1      
+# aws ec2 describe-images --owners 801119661308 --filters "Name=name,Values=Windows_Server-2019-English*" --query 'sort_by(Images, &CreationDate)[].Name'
+
+
