@@ -1,4 +1,8 @@
----
+
+$myIp = (Invoke-WebRequest -Uri http://checkip.amazonaws.com/).ToString().Trim()
+$Stack = @{
+    StackName = "test01"
+    TemplateBody = @'
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
@@ -53,3 +57,8 @@ Outputs:
     Value: !GetAtt
       - Ec2Instance
       - PublicDnsName
+'@
+
+}
+
+New-CfnStack @Stack
